@@ -1,0 +1,30 @@
+ 00001 FORMAT = 6;
+ 00002 
+ 00003 BEGIN
+ 00004   IF TAU == 0 THEN GOTO A ENDIF
+ 00005   OUT RESULT.DAT
+ 00006 A: END
+ 00007 END
+ --------------------
+ 00003 BEGIN
+ 00004   IF TAU == 0 THEN GOTO A ENDIF
+ 00005   OUT RESULT.DAT
+ 00006 A: END
+ --------------------
+ 00007 END
+ 00008 
+ 00009 OUTPUT RESULT.DAT
+ 00010   IF FIRST THEN
+ 00011     FIRST = 0;
+ 00012   ENDIF
+ 00013   WRITE _S_val, _Q_valve, _Q_pump_curr, DP.CPUMP1, P.CH1(2), P.CH1(3);
+ 00014 END
+  
+ %inf- MAIN proc. Initial value of LOCAL_ERR is 1.000000000E-04
+ %inf- MAIN proc. Initial value of FORMAT is 10
+  
+ Usage of space: Variables (<korres>), Descriptors, Procedures
+ Used   space:           0.01%            0.33%        0.56% 
+  
+  
+ Used space for variables   0.00%

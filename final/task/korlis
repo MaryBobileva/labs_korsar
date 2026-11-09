@@ -1,0 +1,1197 @@
+ 00001 !!bb Ключи основной процедуры
+ 00002 
+ 00003 ! Ключ
+ 00004 restart = 0;
+ 00005 title = 'VD.035.004';
+ 00006 dt_max = 0.001;
+ 00007 dt_out = 0.1;
+ 00008 fin_tim = 210;
+ 00009 dt_sav = 0;
+ 00010 append_res = 1;
+ 00011 append_sav = 0;
+ 00012 ! noption = '2,3,7,10';
+ 00013 check_only = 0;
+ 00014 local_err = 1.0e-4;
+ 00015 ngas = 'H2O, N2, O2';
+ 00016 dt_diag = dt_out;
+ 00017 inf = 1;
+ 00018 accel_stat = 0;
+ 00019 nwsp_dat='nwsp_dat';
+ 00020 _tauRest = 0.; ! момент рестарта
+ 00021 _debug = 0; ! вывод отладочной информации
+ 00022 _diag = 0;  ! режим вывода диагностики
+ 00023             ! 0 - нет диагностики
+ 00024             ! 1 - краткая
+ 00025             ! 2 - расширенная
+ 00026 
+ _monPer = 5.0;    ! Период вывода диагностики в фай�
+ �
+ 00027 !!eb
+ 00028 
+ 00029 !!bb Общие глобальные переменные
+ 00030 ! Константы
+ 00031 _t0C = 273.15;
+ 00032 _tOffset = _t0C;
+ 00033 _pi = acos(-1);
+ 00034 _gg = 9.81;
+ 00035 
+ _RHO_W = 1000.;           ! плотность воды, кг/м3 (20 C, 1 МП
+ �
+ 00036 _xgAir(1:4) = 0.,0.,0.757,0.243;
+ 00037 _xgN2(1:4) = 0.,0.,9.999e-1,0.;
+ 00038 _pAtm = 101.3e+03;
+ 00039 _tAtm = 20.+_tOffset;
+ 00040 _tsAtm = WS1P1(1,'P',_pAtm,2);
+ 00041 _kgs = 98066.5;  ! кгс/см2, Па
+ 00042 _MPa = 1.e6; ! МПа, Па
+ 00043 _kPa = 1.e3; ! МПа, Па
+ 00044 _MWt = 1.e6; ! МПа, Па
+ 00045 _kWt = 1.e3; ! МПа, Па
+ 00046 _atm = 101325.; ! атм, Па
+ 00047 _bar = 1.e5; ! бар, Па
+ 00048 
+ _timeMon = 0.;    ! Вспомогательные переменные диа�
+ �
+ 00049 _timeMonOld = 0.; ! -//-
+ 00050 ! Свойства проводника тепла
+ 00051 _tlamStal(1:2,1:2) =
+ 00052   273.,   50.
+ 00053  ,1000.,  50.;
+ 00054 _thcStal(1:2,1:2) =
+ 00055   273.,   500.
+ 00056  ,1000.,  500.;
+ 00057 _troStal(1:2,1:2) =
+ 00058   273.,   7800.
+ 00059  ,1000.,  7800.;
+ 00060 
+ 00061 ! Датчики
+ 00062 _sensor(1:20) = 0.;
+ 00063 
+ 00064 ! --- Характеристика насоса H(Q) ---
+ 00065 _NH_pump = 9;
+ 00066 
+ _H_pump(1:9) = 21.20, 21.35, 21.42, 21.40, 21.32, 21.20, 21.00, 20.65, 20.10;
+ 00067 
+ _Q_pump(1:9) = 11.0,  13.0,  15.0,  17.0,  19.0,  21.0,  24.0,  28.0,  31.5;
+ 00068 
+ 00069 ! --- Рабочие переменные для EVENT ---
+ 00070 
+ _G_pump      = 0.;        ! массовый расход через насос
+ ,
+ 00071 
+ _Q_pump_curr = 0.;        ! объёмный расход через насос
+ ,
+ 00072 _H_pump_curr = 0.;        ! текущий напор, м
+ 00073 
+ _G_valve     = 0.;        ! массовый расход через клапа
+ �
+ 00074 
+ _Q_valve     = 0.;        ! объёмный расход через клапа
+ �
+ 00075 
+ _S_val       = 0.;        ! текущее положение штока кла
+ �
+ 00076 
+ _N_step      = 0;         ! счётчик ступеней открытия
+ 00077 _dS          = 0.25;       ! шаг изменения штока
+ 00078 _DT_step     = 20.;       ! время на одну ступень, с
+ 00079 
+ _S_max       = 1.0;       ! максимальное положение што�
+ �
+ 00080 
+ _S_start     = 0.0;       ! начальное положение штока
+ 00081 
+ _T_ramp   = 200.;         ! время полного открытия, с
+ 00082 
+ _T_begin  = 5.;           ! момент начала открытия, с
+ 00083 
+ 00084 _n0 = 3;
+ 00085 
+ 00086 MAIN:
+ 00087 _FIRST_mon   = 1;
+ 00088 _N_call_mon  = 0;
+ 00089 _N_spike_mon = 0;
+ 00090 _Q_valve_old = 0.;
+ 00091 _TAU_mon_old = 0.;
+ 00092 _S_val_buf   = 0.;
+ 00093 _Q_valve_buf = 0.;
+ 00094 _Q_pump_buf  = 0.;
+ 00095 _DP_buf      = 0.;
+ 00096 _DT_mon      = 10.;
+ 00097 _dQ_spike    = 0.5;
+ 00098 
+ 00099 LAYOUT
+ 00100 CH1/i - BVOL_T1;
+ 00101 CH1(2) - CPUMP1;
+ 00102 CH1(3) - VAL1;
+ 00103 CH1(4) - LR1;
+ 00104 CH1/o - BVOL_T1;
+ 00105 END
+ 00106 
+ 00107 ! CALLs
+ 00108 CALL _Ch;
+ 00109 CALL _Bv;
+ 00110 CALL _Lr;
+ 00111 CALL _Val;
+ 00112 CALL _Pmp;
+ 00113 
+ 00114 ! SETs
+ 00115 SET _DtHandle;
+ 00116 SET _Actions;
+ 00117 SET _CalcSensor;
+ 00118 SET _Monitor;
+ 00119 
+ 00120 ! OUTs
+ 00121 OUT _Res;
+ 00122 
+ 00123 END
+ 00124 
+ 00125 !!bb DATAs
+ 00126 
+ 00127 DATA _Ch
+ 00128   MDL = 'CH';
+ 00129   ELS = 1;
+ 00130   IF(NV==1) THEN
+ 00131 
+     N = _n0;                       ! В канале 3 последовател
+ �
+ 00132     TYPE  = 0;
+ 00133 
+ 00134 
+     ! расчитываем площади сечения (S) для кажд�
+ �
+ 00135 
+     S(1) = (_pi*(0.050**2))/4;    ! Ячейка 1: DN50 (внутренний 
+ �
+ 00136 
+     S(2) = (_pi*(0.050**2))/4;    ! Ячейка 2: DN50 (внутренний 
+ �
+ 00137 
+     S(3) = (_pi*(0.100**2))/4;    ! Ячейка 3: DN100 (внутренний
+ 00138 
+ 00139 
+     ! Задаем периметры (PR) для каждой ячейки:
+ 00140     PR(1) = _pi*0.050;           ! Периметр ячейки 1
+ 00141     PR(2) = _pi*0.050;           ! Периметр ячейки 2
+ 00142     PR(3) = _pi*0.100;           ! Периметр ячейки 3
+ 00143 
+ 00144 
+     DZ(1:3) = 1.0;               ! Длина каждой ячейки сос�
+ �
+ 00145     DH(1:3) = 0.;
+ 00146     ROU = 2e-5;
+ 00147 
+     P = 1.*_MPa;                 ! Давление 1 МПа по задани�
+ �
+ 00148 
+     T(1,1:N) = 20.+_t0C;         ! Температура воды 20 град�
+ �
+ 00149     T(2,1:N) = 20.+_t0C;
+ 00150     VOID = 0;
+ 00151     XNG(1,1:N) = _xgAir(1);
+ 00152     XNG(2,1:N) = _xgAir(2);
+ 00153     XNG(3,1:N) = _xgAir(3);
+ 00154     XNG(4,1:N) = _xgAir(4);
+ 00155   ENDIF
+ 00156 END
+ 00157 
+ 00158 DATA _Bv
+ 00159   MDL = 'BVOL_T';
+ 00160   ELS = 1;
+ 00161   IF(NV==1) THEN
+ 00162     P = 1.*_MPa;
+ 00163     VOID = 0.;
+ 00164     T = 20.+_t0C;
+ 00165     XNG = _xgAir;
+ 00166   ENDIF
+ 00167 END
+ 00168 
+ 00169 DATA _Lr
+ 00170   MDL = 'LR';
+ 00171   ELS = 1;
+ 00172   IF(NV==1) THEN
+ 00173 
+     CSI1 = 140.;                 ! Базовый КГС местного со�
+ �
+ 00174     CSI2 = 1400.;
+ 00175   ENDIF
+ 00176 END
+ 00177 
+ 00178 DATA _Val
+ 00179   MDL = 'VAL';
+ 00180   ELS = 1;
+ 00181   IF(NV==1) THEN
+ 00182 
+     K = 5;                       ! 5 точек аппроксимации ха
+ �
+ 00183 
+ 00184 
+     ! Задаем паспортную линейную характерист
+ �
+ 00185 
+     ! Столбец 1 - положение штока, Столбец 2 - ра
+ �
+ 00186 
+     F(1,1) = 0.0;  F(1,2) = 0.0;  F(1,3) = 0.0;  ! Полностью закр�
+ �
+ 00187     F(2,1) = 0.25; F(2,2) = 0.25; F(2,3) = 0.25; ! Открыт на 25%
+ 00188     F(3,1) = 0.50; F(3,2) = 0.50; F(3,3) = 0.50; ! Открыт на 50%
+ 00189     F(4,1) = 0.75; F(4,2) = 0.75; F(4,3) = 0.75; ! Открыт на 75%
+ 00190 
+     F(5,1) = 1.0;  F(5,2) = 1.0;  F(5,3) = 1.0;  ! Полностью откр�
+ �
+ 00191 
+ 00192     CSI1 = 1.0;
+ 00193 
+     S = 0.0;                     ! Начальное положение што
+ �
+ 00194     LS(1) = 0.;
+ 00195     LS(2) = 1.;
+ 00196   ENDIF
+ 00197 END
+ 00198 
+ 00199 DATA _Pmp
+ 00200   MDL = 'CPUMP';
+ 00201   ELS = 1;
+ 00202   IF(NV==1) THEN
+ 00203 
+     MODE = 2;                  ! Модель насоса отключена, 
+ �
+ 00204   ENDIF
+ 00205 END
+ 00206 
+ 00207 
+ 00208 !!bb EVENTs
+ 00209 
+ 00210 EVENT _DtHandle
+ 00211   TYPE = 0;
+ 00212   REPLACE = 1;
+ 00213   TURN_ON = 1;
+ 00214   IF (TAU>0.) THEN
+ 00215     dt_max = 0.01;
+ 00216   ENDIF
+ 00217   IF (TAU>0.)&(TAU<=3.) THEN
+ 00218     dt_max = 0.01;
+ 00219     dt_out = 0.1;
+ 00220     dt_diag = 10.;
+ 00221   ENDIF
+ 00222   IF (TAU>3.) THEN
+ 00223     dt_max = 0.01;
+ 00224     dt_out = 10.;
+ 00225     dt_diag = 10.;
+ 00226   ENDIF
+ 00227 
+ 00228 END
+ 00229 
+ 00230 EVENT _Actions
+ 00231   TYPE = 0;
+ 00232   REPLACE = 1;
+ 00233   TURN_ON = 1;
+ 00234   IF (TAU >= _T_begin) THEN
+ 00235 
+     _S_val = MIN(_S_max, _S_start+(_S_max - _S_start)*(TAU - _T_begin)/_T_ramp)
+ ;
+ 00236     S.VAL1 = _S_val;
+ 00237   ELSE
+ 00238     S.VAL1 = _S_start;
+ 00239   ENDIF
+ 00240     ! --- Вызов _Monitor ---
+ 00241   IF (TAU>0.) THEN
+ 00242     CALL _Monitor(0.5);
+ 00243   ENDIF
+ 00244 END
+ 00245 
+ 00246 EVENT _CalcSensor
+ 00247   TYPE = 0;
+ 00248   REPLACE = 1;
+ 00249   TURN_ON = 1;
+ 00250 
+   ! 1. Массовый расход через насос (соединени�
+ �
+ 00251   _G_pump = "($W.CH1(1,2),1);
+ 00252 
+ 00253 
+   ! 2. Перевод массового расхода в объёмный, м
+ 3
+ 00254   _Q_pump_curr = _G_pump / _RHO_W * 3600.;
+ 00255 
+ 00256   ! 3. Интерполяция напора по таблице H(Q)
+ 00257   _H_pump_curr = LINS(_H_pump, _Q_pump, _NH_pump, _Q_pump_curr);
+ 00258 
+ 00259   ! 4. Присвоение напора насосу (в Па)
+ 00260   DP.CPUMP1 = _H_pump_curr * _RHO_W * _gg;
+ 00261 
+ 00262 
+   ! 5. Массовый расход через клапан (соединен�
+ �
+ 00263   _G_valve = "($W.CH1(1,3),1);
+ 00264 
+ 00265   ! 6. Объёмный расход через клапан
+ 00266   _Q_valve = _G_valve / _RHO_W * 3600.;
+ 00267 END
+ 00268 
+ 00269 EVENT _Monitor(_dt)
+ 00270   TURN_ON = 1;
+ 00271 
+   ! --- 1. Разовая инициализация счётчиков ---
+ 00272   IF _FIRST_mon == 1 THEN
+ 00273     _FIRST_mon    = 0;
+ 00274     _N_call_mon   = 0;
+ 00275     _N_spike_mon  = 0;
+ 00276     _Q_valve_old  = 0.;
+ 00277     _TAU_mon_old  = 0.;
+ 00278   ENDIF
+ 00279 
+ 00280   ! --- 2. Учёт вызовов ---
+ 00281   _N_call_mon = _N_call_mon + 1;
+ 00282 
+ 00283 
+   ! --- 3. Контроль скачков расхода между сосед
+ �
+ 00284   IF ABS(_Q_valve - _Q_valve_old) > _dQ_spike THEN
+ 00285     _N_spike_mon = _N_spike_mon + 1;
+ 00286   ENDIF
+ 00287   _Q_valve_old = _Q_valve;
+ 00288 
+ 00289 
+   ! --- 4. Периодический сброс «буфера» и запис
+ �
+ 00290   IF (TAU - _TAU_mon_old) >= _DT_mon THEN
+ 00291     _TAU_mon_old = TAU;
+ 00292 
+ 00293 
+     ! Буфер текущего состояния (доступен друг
+ �
+ 00294     _S_val_buf   = _S_val;
+ 00295     _Q_valve_buf = _Q_valve;
+ 00296     _Q_pump_buf  = _Q_pump_curr;
+ 00297     _DP_buf      = DP.CPUMP1;
+ 00298 
+ 00299     ! Сообщение в файл листинга KORLIS
+ 00300     PRINT 'MON t=', TAU, ' S=', _S_val, ' Qv=', _Q_valve,
+ 00301         ' Qp=', _Q_pump_curr, ' DP=', DP.CPUMP1;
+ 00302   ENDIF
+ 00303 
+ 00304 END
+ 00305 
+ 00306 
+ 00307 !!bb OUTPUTs
+ 00308 OUTPUT _Res
+ 00309   ! Строка данных
+ 00310   WRITE  _S_val, _Q_valve, _Q_pump_curr, DP.CPUMP1, P.CH1(2), P.CH1(3);
+ 00311 END
+  
+ %inf- DATA _CH Default value of XB.CH1 = 0.000000000E+00
+ %inf- DATA _CH Default value of MBW.CH1 = 0.000000000E+00
+ %inf- DATA _CH Default value of SRE.CH1 = 1.000000000E+00
+ %inf- DATA _CH Default value of AOUAS.CH1 = 1.000000000E+00
+ %inf- DATA _CH Default value of NE.CH1 = 1
+ %inf- DATA _CH Default value of XNF.CH1 = 0.000000000E+00
+ %inf- DATA _CH Default value of JIN.CH1 = 5.000000000E-01
+ %inf- DATA _CH Default value of JOU.CH1 = 5.000000000E-01
+ %inf- DATA _CH Default value of PROC.CH1 = 0
+ %inf- DATA _BV Default value of XB.BVOL_T1 = 0.000000000E+00
+ %inf- DATA _BV Default value of XNF.BVOL_T1 = 0.000000000E+00
+ %inf- DATA _LR Default value of DHOLE.LR1 = 0.000000000E+00
+ %inf- DATA _LR Default value of SHOLE.LR1 = 0.000000000E+00
+ %inf- DATA _VAL Default value of CSI2.VAL1 = 1.000000000E+00
+ %inf- DATA _PMP Default value of NM1.CPUMP1 = 3
+ %inf- DATA _PMP Default value of NM2.CPUMP1 = 3
+ %inf- DATA _PMP Default value of NM3.CPUMP1 = 3
+ %inf- DATA _PMP Default value of NM4.CPUMP1 = 3
+ %inf- DATA _PMP Default value of NP1.CPUMP1 = 3
+ %inf- DATA _PMP Default value of NP2.CPUMP1 = 3
+ %inf- DATA _PMP Default value of NP3.CPUMP1 = 4
+ %inf- DATA _PMP Default value of NP4.CPUMP1 = 3
+ %inf- DATA _PMP Default value of NKH.CPUMP1 = 2
+ %inf- DATA _PMP Default value of NKM.CPUMP1 = 2
+ %inf- DATA _PMP Default value of OR.CPUMP1 = 0
+ %inf- DATA _PMP Key CM1.CPUMP1 set to DEFAULT value
+ %inf- DATA _PMP Key CM2.CPUMP1 set to DEFAULT value
+ %inf- DATA _PMP Key CM3.CPUMP1 set to DEFAULT value
+ %inf- DATA _PMP Key CM4.CPUMP1 set to DEFAULT value
+ %inf- DATA _PMP Key CP1.CPUMP1 set to DEFAULT value
+ %inf- DATA _PMP Key CP2.CPUMP1 set to DEFAULT value
+ %inf- DATA _PMP Key CP3.CPUMP1 set to DEFAULT value
+ %inf- DATA _PMP Key CP4.CPUMP1 set to DEFAULT value
+ %inf- DATA _PMP Default value of TYPE.CPUMP1 = 0
+ %inf- DATA _PMP Key KH.CPUMP1 set to DEFAULT value
+ %inf- DATA _PMP Key KM.CPUMP1 set to DEFAULT value
+ %inf- DATA _PMP Default value of REVN.CPUMP1 = 1.000000000E+00
+ %inf- DATA _PMP Default value of QN.CPUMP1 = 1.000000000E+00
+ %inf- DATA _PMP Default value of DPN.CPUMP1 = 1.000000000E+05
+ %inf- DATA _PMP Default value of EFF1.CPUMP1 = 8.000000000E-01
+ %inf- DATA _PMP Default value of EFF.CPUMP1 = 9.000000000E-01
+ %inf- DATA _PMP Default value of HMOM.CPUMP1 = 0.000000000E+00
+ %inf- DATA _PMP Default value of J.CPUMP1 = 1.000000000E+00
+ %inf- DATA _PMP Default value of F.CPUMP1 = 0.000000000E+00
+ %inf- DATA _PMP Default value of D.CPUMP1 = 1.000000000E+00
+ %inf- DATA _PMP Default value of K.CPUMP1 = 0.000000000E+00
+ %inf- DATA _PMP Default value of REV.CPUMP1 = 0.000000000E+00
+ %inf- DATA _PMP Default value of HVAC.CPUMP1 = 0.000000000E+00
+ %inf- DATA _PMP Default value of DIAM.CPUMP1 = 0.000000000E+00
+ %inf- DATA _PMP Default value of PEXP.CPUMP1 = 1.013250000E+05
+ %inf- DATA _PMP Default value of TEXP.CPUMP1 = 2.931500000E+02
+ %inf- DATA _PMP Default value of REV0.CPUMP1 = 1.000000000E-03
+  
+ %inf- List of parameters that will be written into <korres>
+ _S_VAL _Q_VALVE _Q_PUMP_CURR DP.CPUMP1 P.CH1(2) P.CH1(3)
+  
+ %inf- NGAS = "N2,H2O,O2"
+  
+ %inf- List of EVENTs that will be processed at run time
+ _DTHANDLE _ACTIONS _CALCSENSOR _MONITOR
+  
+  
+ Usage of space: Keys, Descriptors, Notkeys, Events, Output, Layout
+ Used   space:   0.14%    1.59%     21.00%   66.10%   0.75%   5.06%
+  
+ %inf- Total number of elements in scheme is 5:
+         CH         - 1 ( 3 volumes )
+         BVOL_T     - 1
+         LR         - 1
+         VAL        - 1
+         CPUMP      - 1
+       CH+COL cells - 3
+  
+  
+ %inf- WS properties type: non-spline
+  
+ Usage of space for Keys with integer work arrays:   0.14%
+ Usage of space for Keys with real work arrays:      0.15%
+ %inf- Number of single volumes  : 3
+ %inf-                  in  CHs  : 3
+ %inf-                  in COLs  : 0
+ %inf- Number of single junctions: 4
+ %inf- NOPT:  1 0 0 0 1  0 0 0 0 0  0 0 0 0 0  0 0 0 0 0
+ %inf- S2-saving full. Length = 1324
+  
+ +++++++++ Starting time
+ %inf- Problem time = 1.057189572E-01 Step = 9.701723378E-03
+ ----- No divisions of DT occured in CH-s because of "Cour > C_max"
+ ----- No divisions of DT occured in CH-s because of "DisM > D_max"
+ ----- No divisions of DT occured in CH-s because of "DEnt > DE_max"
+ ----- No divisions of DT occured in CH-s because of "D_Pr > DP_max"
+ ----- No divisions of DT occured in CH-s because of "DVel > DV_max"
+ %inf- Gen_aSt = 8.819748526E-03 N_lim = 0.000000000E+00 eS= 8.819748526E-03
+ %inf- Interval 0.000000000E+00:1.057189572E-01 Av.step =    2.202478274E-03
+       N of accepted steps 4.800000000E+01 Eff_average_step= 7.357995779E-04
+       Other:kBvg=0.000000000E+00 kTiWd=0.000000000E+00 k2g=0.000000000E+00
+             kHCS=0.000000000E+00 kCour=0.000000000E+00 Sum=0.000000000E+00
+       N_rej_step_by_MEPV = 0.000000000E+00 N_rej_steps = 0.000000000E+00
+ %inf- Escaped(+)/entered(-) mass: Ms = 5.474816056E-16
+       Initial mass (at TAU=0)   : M0 = 1.176599940E+01
+       Current mass (current TAU): Mc = 1.176599940E+01
+       (Mc + Ms - M0) / M0 = 0.000000000E+00
+       (Mc + Ms - M0) / Mc = 0.000000000E+00
+ %inf- Escaped(+)/entered(-) enthalpy: Hs = 4.916940489E-11
+       Initial enthalpy (at TAU=0)   : H0 = 9.977566055E+05
+       Current enthalpy (current TAU): Hc = 9.977566055E+05
+       (Hc + Hs - H0) / H0 = -1.283447820E-15
+       (Hc + Hs - H0) / Hc = -1.283447820E-15
+ %inf- Noncond. components in gas and water phases:
+ %inf- Escaped(+)/entered(-) mass: Ms = 3.883499097E-49
+       Initial mass (at TAU=0)   : M0 = 0.000000000E+00
+       Current mass (current TAU): Mc = 1.389681980E-32
+       (Mc + Ms - M0) = 1.389681980E-32
+ %inf- Noncond. components in water phase:
+ %inf- Escaped(+)/entered(-) mass: Ms = -1.290953829E-64
+       Initial mass (at TAU=0)   : M0 = 0.000000000E+00
+       Current mass (current TAU): Mc = 1.290953829E-64
+       (Mc + Ms - M0) = -1.686751671E-80
+ --------- Starting time
+  
+  
+ %inf- Problem time = 1.000571896E+01 Step = 1.000000000E-02
+ ----- No divisions of DT occured in CH-s because of "Cour > C_max"
+ ----- No divisions of DT occured in CH-s because of "DisM > D_max"
+ ----- No divisions of DT occured in CH-s because of "DEnt > DE_max"
+ ----- No divisions of DT occured in CH-s because of "D_Pr > DP_max"
+ ----- No divisions of DT occured in CH-s because of "DVel > DV_max"
+ %inf- Gen_aSt = 9.999699015E-03 N_lim = 0.000000000E+00 eS= 9.999707983E-03
+ %inf- Interval 1.057189572E-01:1.000571896E+01 Av.step =    9.989909183E-03
+       N of accepted steps 9.910000000E+02 Eff_average_step= 1.000950742E-02
+       Other:kBvg=0.000000000E+00 kTiWd=0.000000000E+00 k2g=0.000000000E+00
+             kHCS=0.000000000E+00 kCour=0.000000000E+00 Sum=0.000000000E+00
+       N_rej_step_by_MEPV = 0.000000000E+00 N_rej_steps = 0.000000000E+00
+ %inf- Escaped(+)/entered(-) mass: Ms = 1.888408977E-05
+       Initial mass (at TAU=0)   : M0 = 1.176599940E+01
+       Current mass (current TAU): Mc = 1.176598051E+01
+       (Mc + Ms - M0) / M0 = -2.418932838E-10
+       (Mc + Ms - M0) / Mc = -2.418936721E-10
+ %inf- Escaped(+)/entered(-) enthalpy: Hs = -4.447778576E+02
+       Initial enthalpy (at TAU=0)   : H0 = 9.977566055E+05
+       Current enthalpy (current TAU): Hc = 9.982013832E+05
+       (Hc + Hs - H0) / H0 = -2.403142866E-10
+       (Hc + Hs - H0) / Hc = -2.402072076E-10
+ %inf- Noncond. components in gas and water phases:
+ %inf- Escaped(+)/entered(-) mass: Ms = 1.155371812E-18
+       Initial mass (at TAU=0)   : M0 = 0.000000000E+00
+       Current mass (current TAU): Mc = 1.011791820E-17
+       (Mc + Ms - M0) = 1.127329002E-17
+ %inf- Noncond. components in water phase:
+ %inf- Escaped(+)/entered(-) mass: Ms = -1.606417929E-29
+       Initial mass (at TAU=0)   : M0 = 0.000000000E+00
+       Current mass (current TAU): Mc = 1.606417929E-29
+       (Mc + Ms - M0) = 1.121038771E-44
+  
+ %inf- Problem time = 2.000571896E+01 Step = 1.000000000E-02
+ ----- No divisions of DT occured in CH-s because of "Cour > C_max"
+ ----- No divisions of DT occured in CH-s because of "DisM > D_max"
+ ----- No divisions of DT occured in CH-s because of "DEnt > DE_max"
+ ----- No divisions of DT occured in CH-s because of "D_Pr > DP_max"
+ ----- No divisions of DT occured in CH-s because of "DVel > DV_max"
+ %inf- Gen_aSt = 9.999850188E-03 N_lim = 0.000000000E+00 eS= 9.999854654E-03
+ %inf- Interval 1.000571896E+01:2.000571896E+01 Av.step =    1.000000000E-02
+       N of accepted steps 1.000000000E+03 Eff_average_step= 1.000000000E-02
+       Other:kBvg=0.000000000E+00 kTiWd=0.000000000E+00 k2g=0.000000000E+00
+             kHCS=0.000000000E+00 kCour=0.000000000E+00 Sum=0.000000000E+00
+       N_rej_step_by_MEPV = 0.000000000E+00 N_rej_steps = 0.000000000E+00
+ %inf- Escaped(+)/entered(-) mass: Ms = 4.336693115E-05
+       Initial mass (at TAU=0)   : M0 = 1.176599940E+01
+       Current mass (current TAU): Mc = 1.176595603E+01
+       (Mc + Ms - M0) / M0 = -4.530132899E-11
+       (Mc + Ms - M0) / Mc = -4.530149596E-11
+ %inf- Escaped(+)/entered(-) enthalpy: Hs = -1.560599070E+03
+       Initial enthalpy (at TAU=0)   : H0 = 9.977566055E+05
+       Current enthalpy (current TAU): Hc = 9.993172046E+05
+       (Hc + Hs - H0) / H0 = -3.928995475E-11
+       (Hc + Hs - H0) / Hc = -3.922859699E-11
+ %inf- Noncond. components in gas and water phases:
+ %inf- Escaped(+)/entered(-) mass: Ms = 4.917259368E-17
+       Initial mass (at TAU=0)   : M0 = 0.000000000E+00
+       Current mass (current TAU): Mc = 3.069203633E-17
+       (Mc + Ms - M0) = 7.986463001E-17
+ %inf- Noncond. components in water phase:
+ %inf- Escaped(+)/entered(-) mass: Ms = -3.383084038E-28
+       Initial mass (at TAU=0)   : M0 = 0.000000000E+00
+       Current mass (current TAU): Mc = 3.383084038E-28
+       (Mc + Ms - M0) = -2.242077543E-43
+  
+ %inf- Problem time = 3.000571896E+01 Step = 1.000000000E-02
+ ----- No divisions of DT occured in CH-s because of "Cour > C_max"
+ ----- No divisions of DT occured in CH-s because of "DisM > D_max"
+ ----- No divisions of DT occured in CH-s because of "DEnt > DE_max"
+ ----- No divisions of DT occured in CH-s because of "D_Pr > DP_max"
+ ----- No divisions of DT occured in CH-s because of "DVel > DV_max"
+ %inf- Gen_aSt = 9.999900275E-03 N_lim = 0.000000000E+00 eS= 9.999903249E-03
+ %inf- Interval 2.000571896E+01:3.000571896E+01 Av.step =    1.000000000E-02
+       N of accepted steps 1.000000000E+03 Eff_average_step= 1.000000000E-02
+       Other:kBvg=0.000000000E+00 kTiWd=0.000000000E+00 k2g=0.000000000E+00
+             kHCS=0.000000000E+00 kCour=0.000000000E+00 Sum=0.000000000E+00
+       N_rej_step_by_MEPV = 0.000000000E+00 N_rej_steps = 0.000000000E+00
+ %inf- Escaped(+)/entered(-) mass: Ms = -1.014567018E-05
+       Initial mass (at TAU=0)   : M0 = 1.176599940E+01
+       Current mass (current TAU): Mc = 1.176600954E+01
+       (Mc + Ms - M0) / M0 = 1.530118774E-11
+       (Mc + Ms - M0) / Mc = 1.530117454E-11
+ %inf- Escaped(+)/entered(-) enthalpy: Hs = -1.692677304E+03
+       Initial enthalpy (at TAU=0)   : H0 = 9.977566055E+05
+       Current enthalpy (current TAU): Hc = 9.994492829E+05
+       (Hc + Hs - H0) / H0 = 2.191580494E-11
+       (Hc + Hs - H0) / Hc = 2.187868811E-11
+ %inf- Noncond. components in gas and water phases:
+ %inf- Escaped(+)/entered(-) mass: Ms = 1.872401079E-16
+       Initial mass (at TAU=0)   : M0 = 0.000000000E+00
+       Current mass (current TAU): Mc = 3.351948118E-17
+       (Mc + Ms - M0) = 2.207595891E-16
+ %inf- Noncond. components in water phase:
+ %inf- Escaped(+)/entered(-) mass: Ms = -2.345992258E-28
+       Initial mass (at TAU=0)   : M0 = 0.000000000E+00
+       Current mass (current TAU): Mc = 2.345992258E-28
+       (Mc + Ms - M0) = 3.587324069E-43
+  
+ %inf- Problem time = 4.000571896E+01 Step = 1.000000000E-02
+ ----- No divisions of DT occured in CH-s because of "Cour > C_max"
+ ----- No divisions of DT occured in CH-s because of "DisM > D_max"
+ ----- No divisions of DT occured in CH-s because of "DEnt > DE_max"
+ ----- No divisions of DT occured in CH-s because of "D_Pr > DP_max"
+ ----- No divisions of DT occured in CH-s because of "DVel > DV_max"
+ %inf- Gen_aSt = 9.999925263E-03 N_lim = 0.000000000E+00 eS= 9.999927491E-03
+ %inf- Interval 3.000571896E+01:4.000571896E+01 Av.step =    1.000000000E-02
+       N of accepted steps 1.000000000E+03 Eff_average_step= 1.000000000E-02
+       Other:kBvg=0.000000000E+00 kTiWd=0.000000000E+00 k2g=0.000000000E+00
+             kHCS=0.000000000E+00 kCour=0.000000000E+00 Sum=0.000000000E+00
+       N_rej_step_by_MEPV = 0.000000000E+00 N_rej_steps = 0.000000000E+00
+ %inf- Escaped(+)/entered(-) mass: Ms = -8.241300057E-05
+       Initial mass (at TAU=0)   : M0 = 1.176599940E+01
+       Current mass (current TAU): Mc = 1.176608181E+01
+       (Mc + Ms - M0) / M0 = 2.180966532E-11
+       (Mc + Ms - M0) / Mc = 2.180951256E-11
+ %inf- Escaped(+)/entered(-) enthalpy: Hs = -1.697076460E+03
+       Initial enthalpy (at TAU=0)   : H0 = 9.977566055E+05
+       Current enthalpy (current TAU): Hc = 9.994536820E+05
+       (Hc + Hs - H0) / H0 = 2.841296784E-11
+       (Hc + Hs - H0) / Hc = 2.836472250E-11
+ %inf- Noncond. components in gas and water phases:
+ %inf- Escaped(+)/entered(-) mass: Ms = 3.192101273E-16
+       Initial mass (at TAU=0)   : M0 = 0.000000000E+00
+       Current mass (current TAU): Mc = 1.322498477E-17
+       (Mc + Ms - M0) = 3.324351121E-16
+ %inf- Noncond. components in water phase:
+ %inf- Escaped(+)/entered(-) mass: Ms = -2.747832914E-29
+       Initial mass (at TAU=0)   : M0 = 0.000000000E+00
+       Current mass (current TAU): Mc = 2.747832914E-29
+       (Mc + Ms - M0) = 7.062544260E-43
+  
+ %inf- Problem time = 5.000571896E+01 Step = 1.000000000E-02
+ ----- No divisions of DT occured in CH-s because of "Cour > C_max"
+ ----- No divisions of DT occured in CH-s because of "DisM > D_max"
+ ----- No divisions of DT occured in CH-s because of "DEnt > DE_max"
+ ----- No divisions of DT occured in CH-s because of "D_Pr > DP_max"
+ ----- No divisions of DT occured in CH-s because of "DVel > DV_max"
+ %inf- Gen_aSt = 9.999940237E-03 N_lim = 0.000000000E+00 eS= 9.999942019E-03
+ %inf- Interval 4.000571896E+01:5.000571896E+01 Av.step =    1.000000000E-02
+       N of accepted steps 1.000000000E+03 Eff_average_step= 1.000000000E-02
+       Other:kBvg=0.000000000E+00 kTiWd=0.000000000E+00 k2g=0.000000000E+00
+             kHCS=0.000000000E+00 kCour=0.000000000E+00 Sum=0.000000000E+00
+       N_rej_step_by_MEPV = 0.000000000E+00 N_rej_steps = 0.000000000E+00
+ %inf- Escaped(+)/entered(-) mass: Ms = -1.563093900E-04
+       Initial mass (at TAU=0)   : M0 = 1.176599940E+01
+       Current mass (current TAU): Mc = 1.176615571E+01
+       (Mc + Ms - M0) / M0 = 2.168465907E-11
+       (Mc + Ms - M0) / Mc = 2.168437100E-11
+ %inf- Escaped(+)/entered(-) enthalpy: Hs = -1.693036104E+03
+       Initial enthalpy (at TAU=0)   : H0 = 9.977566055E+05
+       Current enthalpy (current TAU): Hc = 9.994496417E+05
+       (Hc + Hs - H0) / H0 = 2.824308601E-11
+       (Hc + Hs - H0) / Hc = 2.819524312E-11
+ %inf- Noncond. components in gas and water phases:
+ %inf- Escaped(+)/entered(-) mass: Ms = 5.013474983E-16
+       Initial mass (at TAU=0)   : M0 = 0.000000000E+00
+       Current mass (current TAU): Mc = 5.480894653E-17
+       (Mc + Ms - M0) = 5.561564448E-16
+ %inf- Noncond. components in water phase:
+ %inf- Escaped(+)/entered(-) mass: Ms = -9.368630320E-29
+       Initial mass (at TAU=0)   : M0 = 0.000000000E+00
+       Current mass (current TAU): Mc = 9.368630320E-29
+       (Mc + Ms - M0) = 6.614128752E-43
+  
+ %inf- Problem time = 6.000571896E+01 Step = 1.000000000E-02
+ ----- No divisions of DT occured in CH-s because of "Cour > C_max"
+ ----- No divisions of DT occured in CH-s because of "DisM > D_max"
+ ----- No divisions of DT occured in CH-s because of "DEnt > DE_max"
+ ----- No divisions of DT occured in CH-s because of "D_Pr > DP_max"
+ ----- No divisions of DT occured in CH-s because of "DVel > DV_max"
+ %inf- Gen_aSt = 9.999950213E-03 N_lim = 0.000000000E+00 eS= 9.999951697E-03
+ %inf- Interval 5.000571896E+01:6.000571896E+01 Av.step =    1.000000000E-02
+       N of accepted steps 1.000000000E+03 Eff_average_step= 1.000000000E-02
+       Other:kBvg=0.000000000E+00 kTiWd=0.000000000E+00 k2g=0.000000000E+00
+             kHCS=0.000000000E+00 kCour=0.000000000E+00 Sum=0.000000000E+00
+       N_rej_step_by_MEPV = 0.000000000E+00 N_rej_steps = 0.000000000E+00
+ %inf- Escaped(+)/entered(-) mass: Ms = -2.232447013E-04
+       Initial mass (at TAU=0)   : M0 = 1.176599940E+01
+       Current mass (current TAU): Mc = 1.176622264E+01
+       (Mc + Ms - M0) / M0 = 2.105992977E-11
+       (Mc + Ms - M0) / Mc = 2.105953019E-11
+ %inf- Escaped(+)/entered(-) enthalpy: Hs = -1.679981011E+03
+       Initial enthalpy (at TAU=0)   : H0 = 9.977566055E+05
+       Current enthalpy (current TAU): Hc = 9.994365866E+05
+       (Hc + Hs - H0) / H0 = 2.755014087E-11
+       (Hc + Hs - H0) / Hc = 2.750383106E-11
+ %inf- Noncond. components in gas and water phases:
+ %inf- Escaped(+)/entered(-) mass: Ms = 8.569444725E-16
+       Initial mass (at TAU=0)   : M0 = 0.000000000E+00
+       Current mass (current TAU): Mc = 6.356889137E-17
+       (Mc + Ms - M0) = 9.205133638E-16
+ %inf- Noncond. components in water phase:
+ %inf- Escaped(+)/entered(-) mass: Ms = -8.964167438E-29
+       Initial mass (at TAU=0)   : M0 = 0.000000000E+00
+       Current mass (current TAU): Mc = 8.964167438E-29
+       (Mc + Ms - M0) = 2.690493052E-43
+  
+ %inf- Problem time = 7.000571896E+01 Step = 1.000000000E-02
+ ----- No divisions of DT occured in CH-s because of "Cour > C_max"
+ ----- No divisions of DT occured in CH-s because of "DisM > D_max"
+ ----- No divisions of DT occured in CH-s because of "DEnt > DE_max"
+ ----- No divisions of DT occured in CH-s because of "D_Pr > DP_max"
+ ----- No divisions of DT occured in CH-s because of "DVel > DV_max"
+ %inf- Gen_aSt = 9.999957334E-03 N_lim = 0.000000000E+00 eS= 9.999958607E-03
+ %inf- Interval 6.000571896E+01:7.000571896E+01 Av.step =    1.000000000E-02
+       N of accepted steps 1.000000000E+03 Eff_average_step= 1.000000000E-02
+       Other:kBvg=0.000000000E+00 kTiWd=0.000000000E+00 k2g=0.000000000E+00
+             kHCS=0.000000000E+00 kCour=0.000000000E+00 Sum=0.000000000E+00
+       N_rej_step_by_MEPV = 0.000000000E+00 N_rej_steps = 0.000000000E+00
+ %inf- Escaped(+)/entered(-) mass: Ms = -2.838530698E-04
+       Initial mass (at TAU=0)   : M0 = 1.176599940E+01
+       Current mass (current TAU): Mc = 1.176628325E+01
+       (Mc + Ms - M0) / M0 = 1.515308250E-11
+       (Mc + Ms - M0) / Mc = 1.515271695E-11
+ %inf- Escaped(+)/entered(-) enthalpy: Hs = -1.681075397E+03
+       Initial enthalpy (at TAU=0)   : H0 = 9.977566055E+05
+       Current enthalpy (current TAU): Hc = 9.994376810E+05
+       (Hc + Hs - H0) / H0 = 2.161034436E-11
+       (Hc + Hs - H0) / Hc = 2.157399530E-11
+ %inf- Noncond. components in gas and water phases:
+ %inf- Escaped(+)/entered(-) mass: Ms = 1.208475966E-15
+       Initial mass (at TAU=0)   : M0 = 0.000000000E+00
+       Current mass (current TAU): Mc = 4.931831307E-17
+       (Mc + Ms - M0) = 1.257794279E-15
+ %inf- Noncond. components in water phase:
+ %inf- Escaped(+)/entered(-) mass: Ms = -3.219825569E-29
+       Initial mass (at TAU=0)   : M0 = 0.000000000E+00
+       Current mass (current TAU): Mc = 3.219825569E-29
+       (Mc + Ms - M0) = 1.008934894E-43
+  
+ %inf- Problem time = 8.000571896E+01 Step = 1.000000000E-02
+ ----- No divisions of DT occured in CH-s because of "Cour > C_max"
+ ----- No divisions of DT occured in CH-s because of "DisM > D_max"
+ ----- No divisions of DT occured in CH-s because of "DEnt > DE_max"
+ ----- No divisions of DT occured in CH-s because of "D_Pr > DP_max"
+ ----- No divisions of DT occured in CH-s because of "DVel > DV_max"
+ %inf- Gen_aSt = 9.999962673E-03 N_lim = 0.000000000E+00 eS= 9.999963787E-03
+ %inf- Interval 7.000571896E+01:8.000571896E+01 Av.step =    1.000000000E-02
+       N of accepted steps 1.000000000E+03 Eff_average_step= 1.000000000E-02
+       Other:kBvg=0.000000000E+00 kTiWd=0.000000000E+00 k2g=0.000000000E+00
+             kHCS=0.000000000E+00 kCour=0.000000000E+00 Sum=0.000000000E+00
+       N_rej_step_by_MEPV = 0.000000000E+00 N_rej_steps = 0.000000000E+00
+ %inf- Escaped(+)/entered(-) mass: Ms = -3.385922075E-04
+       Initial mass (at TAU=0)   : M0 = 1.176599940E+01
+       Current mass (current TAU): Mc = 1.176633799E+01
+       (Mc + Ms - M0) / M0 = 1.325217225E-11
+       (Mc + Ms - M0) / Mc = 1.325179090E-11
+ %inf- Escaped(+)/entered(-) enthalpy: Hs = -1.699325565E+03
+       Initial enthalpy (at TAU=0)   : H0 = 9.977566055E+05
+       Current enthalpy (current TAU): Hc = 9.994559311E+05
+       (Hc + Hs - H0) / H0 = 1.977163034E-11
+       (Hc + Hs - H0) / Hc = 1.973801361E-11
+ %inf- Noncond. components in gas and water phases:
+ %inf- Escaped(+)/entered(-) mass: Ms = 1.664045605E-15
+       Initial mass (at TAU=0)   : M0 = 0.000000000E+00
+       Current mass (current TAU): Mc = 4.443117018E-17
+       (Mc + Ms - M0) = 1.708476775E-15
+ %inf- Noncond. components in water phase:
+ %inf- Escaped(+)/entered(-) mass: Ms = -2.306254861E-29
+       Initial mass (at TAU=0)   : M0 = 0.000000000E+00
+       Current mass (current TAU): Mc = 2.306254861E-29
+       (Mc + Ms - M0) = 4.484155086E-43
+  
+ %inf- Problem time = 9.000571896E+01 Step = 1.000000000E-02
+ ----- No divisions of DT occured in CH-s because of "Cour > C_max"
+ ----- No divisions of DT occured in CH-s because of "DisM > D_max"
+ ----- No divisions of DT occured in CH-s because of "DEnt > DE_max"
+ ----- No divisions of DT occured in CH-s because of "D_Pr > DP_max"
+ ----- No divisions of DT occured in CH-s because of "DVel > DV_max"
+ %inf- Gen_aSt = 9.999966825E-03 N_lim = 0.000000000E+00 eS= 9.999967814E-03
+ %inf- Interval 8.000571896E+01:9.000571896E+01 Av.step =    1.000000000E-02
+       N of accepted steps 1.000000000E+03 Eff_average_step= 1.000000000E-02
+       Other:kBvg=0.000000000E+00 kTiWd=0.000000000E+00 k2g=0.000000000E+00
+             kHCS=0.000000000E+00 kCour=0.000000000E+00 Sum=0.000000000E+00
+       N_rej_step_by_MEPV = 0.000000000E+00 N_rej_steps = 0.000000000E+00
+ %inf- Escaped(+)/entered(-) mass: Ms = -3.853423469E-04
+       Initial mass (at TAU=0)   : M0 = 1.176599940E+01
+       Current mass (current TAU): Mc = 1.176638474E+01
+       (Mc + Ms - M0) / M0 = 1.140017748E-11
+       (Mc + Ms - M0) / Mc = 1.139980413E-11
+ %inf- Escaped(+)/entered(-) enthalpy: Hs = -1.715005066E+03
+       Initial enthalpy (at TAU=0)   : H0 = 9.977566055E+05
+       Current enthalpy (current TAU): Hc = 9.994716106E+05
+       (Hc + Hs - H0) / H0 = 1.800525611E-11
+       (Hc + Hs - H0) / Hc = 1.797436068E-11
+ %inf- Noncond. components in gas and water phases:
+ %inf- Escaped(+)/entered(-) mass: Ms = 2.085101297E-15
+       Initial mass (at TAU=0)   : M0 = 0.000000000E+00
+       Current mass (current TAU): Mc = 7.914779422E-17
+       (Mc + Ms - M0) = 2.164249091E-15
+ %inf- Noncond. components in water phase:
+ %inf- Escaped(+)/entered(-) mass: Ms = -5.362458456E-29
+       Initial mass (at TAU=0)   : M0 = 0.000000000E+00
+       Current mass (current TAU): Mc = 5.362458456E-29
+       (Mc + Ms - M0) = 6.726232629E-43
+  
+ %inf- Problem time = 1.000057190E+02 Step = 1.000000000E-02
+ ----- No divisions of DT occured in CH-s because of "Cour > C_max"
+ ----- No divisions of DT occured in CH-s because of "DisM > D_max"
+ ----- No divisions of DT occured in CH-s because of "DEnt > DE_max"
+ ----- No divisions of DT occured in CH-s because of "D_Pr > DP_max"
+ ----- No divisions of DT occured in CH-s because of "DVel > DV_max"
+ %inf- Gen_aSt = 9.999970145E-03 N_lim = 0.000000000E+00 eS= 9.999971036E-03
+ %inf- Interval 9.000571896E+01:1.000057190E+02 Av.step =    1.000000000E-02
+       N of accepted steps 1.000000000E+03 Eff_average_step= 1.000000000E-02
+       Other:kBvg=0.000000000E+00 kTiWd=0.000000000E+00 k2g=0.000000000E+00
+             kHCS=0.000000000E+00 kCour=0.000000000E+00 Sum=0.000000000E+00
+       N_rej_step_by_MEPV = 0.000000000E+00 N_rej_steps = 0.000000000E+00
+ %inf- Escaped(+)/entered(-) mass: Ms = -4.248557688E-04
+       Initial mass (at TAU=0)   : M0 = 1.176599940E+01
+       Current mass (current TAU): Mc = 1.176642425E+01
+       (Mc + Ms - M0) / M0 = 9.718632048E-12
+       (Mc + Ms - M0) / Mc = 9.718281133E-12
+ %inf- Escaped(+)/entered(-) enthalpy: Hs = -1.728327484E+03
+       Initial enthalpy (at TAU=0)   : H0 = 9.977566055E+05
+       Current enthalpy (current TAU): Hc = 9.994849330E+05
+       (Hc + Hs - H0) / H0 = 1.638916195E-11
+       (Hc + Hs - H0) / Hc = 1.636082151E-11
+ %inf- Noncond. components in gas and water phases:
+ %inf- Escaped(+)/entered(-) mass: Ms = 2.605002367E-15
+       Initial mass (at TAU=0)   : M0 = 0.000000000E+00
+       Current mass (current TAU): Mc = 5.688340820E-17
+       (Mc + Ms - M0) = 2.661885775E-15
+ %inf- Noncond. components in water phase:
+ %inf- Escaped(+)/entered(-) mass: Ms = -2.857557506E-29
+       Initial mass (at TAU=0)   : M0 = 0.000000000E+00
+       Current mass (current TAU): Mc = 2.857557506E-29
+       (Mc + Ms - M0) = 5.156778349E-43
+  
+ %inf- Problem time = 1.100057190E+02 Step = 1.000000000E-02
+ ----- No divisions of DT occured in CH-s because of "Cour > C_max"
+ ----- No divisions of DT occured in CH-s because of "DisM > D_max"
+ ----- No divisions of DT occured in CH-s because of "DEnt > DE_max"
+ ----- No divisions of DT occured in CH-s because of "D_Pr > DP_max"
+ ----- No divisions of DT occured in CH-s because of "DVel > DV_max"
+ %inf- Gen_aSt = 9.999972862E-03 N_lim = 0.000000000E+00 eS= 9.999973671E-03
+ %inf- Interval 1.000057190E+02:1.100057190E+02 Av.step =    1.000000000E-02
+       N of accepted steps 1.000000000E+03 Eff_average_step= 1.000000000E-02
+       Other:kBvg=0.000000000E+00 kTiWd=0.000000000E+00 k2g=0.000000000E+00
+             kHCS=0.000000000E+00 kCour=0.000000000E+00 Sum=0.000000000E+00
+       N_rej_step_by_MEPV = 0.000000000E+00 N_rej_steps = 0.000000000E+00
+ %inf- Escaped(+)/entered(-) mass: Ms = -4.581125343E-04
+       Initial mass (at TAU=0)   : M0 = 1.176599940E+01
+       Current mass (current TAU): Mc = 1.176645751E+01
+       (Mc + Ms - M0) / M0 = 8.252224190E-12
+       (Mc + Ms - M0) / Mc = 8.251902899E-12
+ %inf- Escaped(+)/entered(-) enthalpy: Hs = -1.739594234E+03
+       Initial enthalpy (at TAU=0)   : H0 = 9.977566055E+05
+       Current enthalpy (current TAU): Hc = 9.994961998E+05
+       (Hc + Hs - H0) / H0 = 1.497760270E-11
+       (Hc + Hs - H0) / Hc = 1.495153462E-11
+ %inf- Noncond. components in gas and water phases:
+ %inf- Escaped(+)/entered(-) mass: Ms = 2.992927622E-15
+       Initial mass (at TAU=0)   : M0 = 0.000000000E+00
+       Current mass (current TAU): Mc = 5.108590307E-17
+       (Mc + Ms - M0) = 3.044013525E-15
+ %inf- Noncond. components in water phase:
+ %inf- Escaped(+)/entered(-) mass: Ms = -1.447596486E-29
+       Initial mass (at TAU=0)   : M0 = 0.000000000E+00
+       Current mass (current TAU): Mc = 1.447596486E-29
+       (Mc + Ms - M0) = 2.494311266E-43
+  
+ %inf- Problem time = 1.200057190E+02 Step = 1.000000000E-02
+ ----- No divisions of DT occured in CH-s because of "Cour > C_max"
+ ----- No divisions of DT occured in CH-s because of "DisM > D_max"
+ ----- No divisions of DT occured in CH-s because of "DEnt > DE_max"
+ ----- No divisions of DT occured in CH-s because of "D_Pr > DP_max"
+ ----- No divisions of DT occured in CH-s because of "DVel > DV_max"
+ %inf- Gen_aSt = 9.999975125E-03 N_lim = 0.000000000E+00 eS= 9.999975867E-03
+ %inf- Interval 1.100057190E+02:1.200057190E+02 Av.step =    1.000000000E-02
+       N of accepted steps 1.000000000E+03 Eff_average_step= 1.000000000E-02
+       Other:kBvg=0.000000000E+00 kTiWd=0.000000000E+00 k2g=0.000000000E+00
+             kHCS=0.000000000E+00 kCour=0.000000000E+00 Sum=0.000000000E+00
+       N_rej_step_by_MEPV = 0.000000000E+00 N_rej_steps = 0.000000000E+00
+ %inf- Escaped(+)/entered(-) mass: Ms = -4.860962455E-04
+       Initial mass (at TAU=0)   : M0 = 1.176599940E+01
+       Current mass (current TAU): Mc = 1.176648549E+01
+       (Mc + Ms - M0) / M0 = 7.007294796E-12
+       (Mc + Ms - M0) / Mc = 7.007005311E-12
+ %inf- Escaped(+)/entered(-) enthalpy: Hs = -1.749115586E+03
+       Initial enthalpy (at TAU=0)   : H0 = 9.977566055E+05
+       Current enthalpy (current TAU): Hc = 9.995057211E+05
+       (Hc + Hs - H0) / H0 = 1.376719473E-11
+       (Hc + Hs - H0) / Hc = 1.374310241E-11
+ %inf- Noncond. components in gas and water phases:
+ %inf- Escaped(+)/entered(-) mass: Ms = 3.413718988E-15
+       Initial mass (at TAU=0)   : M0 = 0.000000000E+00
+       Current mass (current TAU): Mc = 6.354643941E-17
+       (Mc + Ms - M0) = 3.477265427E-15
+ %inf- Noncond. components in water phase:
+ %inf- Escaped(+)/entered(-) mass: Ms = -3.426878280E-29
+       Initial mass (at TAU=0)   : M0 = 0.000000000E+00
+       Current mass (current TAU): Mc = 3.426878280E-29
+       (Mc + Ms - M0) = -2.242077543E-44
+  
+ %inf- Problem time = 1.300057190E+02 Step = 1.000000000E-02
+ ----- No divisions of DT occured in CH-s because of "Cour > C_max"
+ ----- No divisions of DT occured in CH-s because of "DisM > D_max"
+ ----- No divisions of DT occured in CH-s because of "DEnt > DE_max"
+ ----- No divisions of DT occured in CH-s because of "D_Pr > DP_max"
+ ----- No divisions of DT occured in CH-s because of "DVel > DV_max"
+ %inf- Gen_aSt = 9.999977040E-03 N_lim = 0.000000000E+00 eS= 9.999977725E-03
+ %inf- Interval 1.200057190E+02:1.300057190E+02 Av.step =    1.000000000E-02
+       N of accepted steps 1.000000000E+03 Eff_average_step= 1.000000000E-02
+       Other:kBvg=0.000000000E+00 kTiWd=0.000000000E+00 k2g=0.000000000E+00
+             kHCS=0.000000000E+00 kCour=0.000000000E+00 Sum=0.000000000E+00
+       N_rej_step_by_MEPV = 0.000000000E+00 N_rej_steps = 0.000000000E+00
+ %inf- Escaped(+)/entered(-) mass: Ms = -5.096952562E-04
+       Initial mass (at TAU=0)   : M0 = 1.176599940E+01
+       Current mass (current TAU): Mc = 1.176650909E+01
+       (Mc + Ms - M0) / M0 = 5.959386122E-12
+       (Mc + Ms - M0) / Mc = 5.959127977E-12
+ %inf- Escaped(+)/entered(-) enthalpy: Hs = -1.757176348E+03
+       Initial enthalpy (at TAU=0)   : H0 = 9.977566055E+05
+       Current enthalpy (current TAU): Hc = 9.995137819E+05
+       (Hc + Hs - H0) / H0 = 1.275653791E-11
+       (Hc + Hs - H0) / Hc = 1.273411152E-11
+ %inf- Noncond. components in gas and water phases:
+ %inf- Escaped(+)/entered(-) mass: Ms = 3.881829679E-15
+       Initial mass (at TAU=0)   : M0 = 0.000000000E+00
+       Current mass (current TAU): Mc = 7.153194268E-17
+       (Mc + Ms - M0) = 3.953361622E-15
+ %inf- Noncond. components in water phase:
+ %inf- Escaped(+)/entered(-) mass: Ms = -3.769348353E-29
+       Initial mass (at TAU=0)   : M0 = 0.000000000E+00
+       Current mass (current TAU): Mc = 3.769348353E-29
+       (Mc + Ms - M0) = -7.847271400E-44
+  
+ %inf- Problem time = 1.400057190E+02 Step = 1.000000000E-02
+ ----- No divisions of DT occured in CH-s because of "Cour > C_max"
+ ----- No divisions of DT occured in CH-s because of "DisM > D_max"
+ ----- No divisions of DT occured in CH-s because of "DEnt > DE_max"
+ ----- No divisions of DT occured in CH-s because of "D_Pr > DP_max"
+ ----- No divisions of DT occured in CH-s because of "DVel > DV_max"
+ %inf- Gen_aSt = 9.999978681E-03 N_lim = 0.000000000E+00 eS= 9.999979317E-03
+ %inf- Interval 1.300057190E+02:1.400057190E+02 Av.step =    1.000000000E-02
+       N of accepted steps 1.000000000E+03 Eff_average_step= 1.000000000E-02
+       Other:kBvg=0.000000000E+00 kTiWd=0.000000000E+00 k2g=0.000000000E+00
+             kHCS=0.000000000E+00 kCour=0.000000000E+00 Sum=0.000000000E+00
+       N_rej_step_by_MEPV = 0.000000000E+00 N_rej_steps = 0.000000000E+00
+ %inf- Escaped(+)/entered(-) mass: Ms = -5.296706646E-04
+       Initial mass (at TAU=0)   : M0 = 1.176599940E+01
+       Current mass (current TAU): Mc = 1.176652907E+01
+       (Mc + Ms - M0) / M0 = 5.084795293E-12
+       (Mc + Ms - M0) / Mc = 5.084566401E-12
+ %inf- Escaped(+)/entered(-) enthalpy: Hs = -1.764023212E+03
+       Initial enthalpy (at TAU=0)   : H0 = 9.977566055E+05
+       Current enthalpy (current TAU): Hc = 9.995206288E+05
+       (Hc + Hs - H0) / H0 = 1.194866585E-11
+       (Hc + Hs - H0) / Hc = 1.192757802E-11
+ %inf- Noncond. components in gas and water phases:
+ %inf- Escaped(+)/entered(-) mass: Ms = 4.437638955E-15
+       Initial mass (at TAU=0)   : M0 = 0.000000000E+00
+       Current mass (current TAU): Mc = 5.248758890E-17
+       (Mc + Ms - M0) = 4.490126544E-15
+ %inf- Noncond. components in water phase:
+ %inf- Escaped(+)/entered(-) mass: Ms = -1.567106322E-29
+       Initial mass (at TAU=0)   : M0 = 0.000000000E+00
+       Current mass (current TAU): Mc = 1.567106322E-29
+       (Mc + Ms - M0) = -3.503246161E-43
+  
+ %inf- Problem time = 1.500057190E+02 Step = 1.000000000E-02
+ ----- No divisions of DT occured in CH-s because of "Cour > C_max"
+ ----- No divisions of DT occured in CH-s because of "DisM > D_max"
+ ----- No divisions of DT occured in CH-s because of "DEnt > DE_max"
+ ----- No divisions of DT occured in CH-s because of "D_Pr > DP_max"
+ ----- No divisions of DT occured in CH-s because of "DVel > DV_max"
+ %inf- Gen_aSt = 9.999980103E-03 N_lim = 0.000000000E+00 eS= 9.999980696E-03
+ %inf- Interval 1.400057190E+02:1.500057190E+02 Av.step =    1.000000000E-02
+       N of accepted steps 1.000000000E+03 Eff_average_step= 1.000000000E-02
+       Other:kBvg=0.000000000E+00 kTiWd=0.000000000E+00 k2g=0.000000000E+00
+             kHCS=0.000000000E+00 kCour=0.000000000E+00 Sum=0.000000000E+00
+       N_rej_step_by_MEPV = 0.000000000E+00 N_rej_steps = 0.000000000E+00
+ %inf- Escaped(+)/entered(-) mass: Ms = -5.466565220E-04
+       Initial mass (at TAU=0)   : M0 = 1.176599940E+01
+       Current mass (current TAU): Mc = 1.176654605E+01
+       (Mc + Ms - M0) / M0 = 4.355290220E-12
+       (Mc + Ms - M0) / Mc = 4.355087880E-12
+ %inf- Escaped(+)/entered(-) enthalpy: Hs = -1.769863603E+03
+       Initial enthalpy (at TAU=0)   : H0 = 9.977566055E+05
+       Current enthalpy (current TAU): Hc = 9.995264692E+05
+       (Hc + Hs - H0) / H0 = 1.125292045E-11
+       (Hc + Hs - H0) / Hc = 1.123299488E-11
+ %inf- Noncond. components in gas and water phases:
+ %inf- Escaped(+)/entered(-) mass: Ms = 4.927838146E-15
+       Initial mass (at TAU=0)   : M0 = 0.000000000E+00
+       Current mass (current TAU): Mc = 2.751886704E-17
+       (Mc + Ms - M0) = 4.955357013E-15
+ %inf- Noncond. components in water phase:
+ %inf- Escaped(+)/entered(-) mass: Ms = -1.017659144E-29
+       Initial mass (at TAU=0)   : M0 = 0.000000000E+00
+       Current mass (current TAU): Mc = 1.017659144E-29
+       (Mc + Ms - M0) = -4.750401794E-43
+  
+ %inf- Problem time = 1.600057190E+02 Step = 1.000000000E-02
+ ----- No divisions of DT occured in CH-s because of "Cour > C_max"
+ ----- No divisions of DT occured in CH-s because of "DisM > D_max"
+ ----- No divisions of DT occured in CH-s because of "DEnt > DE_max"
+ ----- No divisions of DT occured in CH-s because of "D_Pr > DP_max"
+ ----- No divisions of DT occured in CH-s because of "DVel > DV_max"
+ %inf- Gen_aSt = 9.999981347E-03 N_lim = 0.000000000E+00 eS= 9.999981904E-03
+ %inf- Interval 1.500057190E+02:1.600057190E+02 Av.step =    1.000000000E-02
+       N of accepted steps 1.000000000E+03 Eff_average_step= 1.000000000E-02
+       Other:kBvg=0.000000000E+00 kTiWd=0.000000000E+00 k2g=0.000000000E+00
+             kHCS=0.000000000E+00 kCour=0.000000000E+00 Sum=0.000000000E+00
+       N_rej_step_by_MEPV = 0.000000000E+00 N_rej_steps = 0.000000000E+00
+ %inf- Escaped(+)/entered(-) mass: Ms = -5.611732549E-04
+       Initial mass (at TAU=0)   : M0 = 1.176599940E+01
+       Current mass (current TAU): Mc = 1.176656057E+01
+       (Mc + Ms - M0) / M0 = 3.748526791E-12
+       (Mc + Ms - M0) / Mc = 3.748348016E-12
+ %inf- Escaped(+)/entered(-) enthalpy: Hs = -1.774869163E+03
+       Initial enthalpy (at TAU=0)   : H0 = 9.977566055E+05
+       Current enthalpy (current TAU): Hc = 9.995314747E+05
+       (Hc + Hs - H0) / H0 = 1.068890347E-11
+       (Hc + Hs - H0) / Hc = 1.066992318E-11
+ %inf- Noncond. components in gas and water phases:
+ %inf- Escaped(+)/entered(-) mass: Ms = 5.587466289E-15
+       Initial mass (at TAU=0)   : M0 = 0.000000000E+00
+       Current mass (current TAU): Mc = 3.357800066E-17
+       (Mc + Ms - M0) = 5.621044289E-15
+ %inf- Noncond. components in water phase:
+ %inf- Escaped(+)/entered(-) mass: Ms = -1.061482631E-29
+       Initial mass (at TAU=0)   : M0 = 0.000000000E+00
+       Current mass (current TAU): Mc = 1.061482631E-29
+       (Mc + Ms - M0) = 1.471363388E-43
+  
+ %inf- Problem time = 1.700057190E+02 Step = 1.000000000E-02
+ ----- No divisions of DT occured in CH-s because of "Cour > C_max"
+ ----- No divisions of DT occured in CH-s because of "DisM > D_max"
+ ----- No divisions of DT occured in CH-s because of "DEnt > DE_max"
+ ----- No divisions of DT occured in CH-s because of "D_Pr > DP_max"
+ ----- No divisions of DT occured in CH-s because of "DVel > DV_max"
+ %inf- Gen_aSt = 9.999982445E-03 N_lim = 0.000000000E+00 eS= 9.999982969E-03
+ %inf- Interval 1.600057190E+02:1.700057190E+02 Av.step =    1.000000000E-02
+       N of accepted steps 1.000000000E+03 Eff_average_step= 1.000000000E-02
+       Other:kBvg=0.000000000E+00 kTiWd=0.000000000E+00 k2g=0.000000000E+00
+             kHCS=0.000000000E+00 kCour=0.000000000E+00 Sum=0.000000000E+00
+       N_rej_step_by_MEPV = 0.000000000E+00 N_rej_steps = 0.000000000E+00
+ %inf- Escaped(+)/entered(-) mass: Ms = -5.736447800E-04
+       Initial mass (at TAU=0)   : M0 = 1.176599940E+01
+       Current mass (current TAU): Mc = 1.176657304E+01
+       (Mc + Ms - M0) / M0 = 3.241104078E-12
+       (Mc + Ms - M0) / Mc = 3.240946067E-12
+ %inf- Escaped(+)/entered(-) enthalpy: Hs = -1.779180440E+03
+       Initial enthalpy (at TAU=0)   : H0 = 9.977566055E+05
+       Current enthalpy (current TAU): Hc = 9.995357860E+05
+       (Hc + Hs - H0) / H0 = 1.022079505E-11
+       (Hc + Hs - H0) / Hc = 1.020260197E-11
+ %inf- Noncond. components in gas and water phases:
+ %inf- Escaped(+)/entered(-) mass: Ms = 6.192908838E-15
+       Initial mass (at TAU=0)   : M0 = 0.000000000E+00
+       Current mass (current TAU): Mc = 3.042522405E-17
+       (Mc + Ms - M0) = 6.223334062E-15
+ %inf- Noncond. components in water phase:
+ %inf- Escaped(+)/entered(-) mass: Ms = -1.934423273E-29
+       Initial mass (at TAU=0)   : M0 = 0.000000000E+00
+       Current mass (current TAU): Mc = 1.934423273E-29
+       (Mc + Ms - M0) = 1.261168618E-43
+  
+ %inf- Problem time = 1.800057190E+02 Step = 1.000000000E-02
+ ----- No divisions of DT occured in CH-s because of "Cour > C_max"
+ ----- No divisions of DT occured in CH-s because of "DisM > D_max"
+ ----- No divisions of DT occured in CH-s because of "DEnt > DE_max"
+ ----- No divisions of DT occured in CH-s because of "D_Pr > DP_max"
+ ----- No divisions of DT occured in CH-s because of "DVel > DV_max"
+ %inf- Gen_aSt = 9.999983421E-03 N_lim = 0.000000000E+00 eS= 9.999983915E-03
+ %inf- Interval 1.700057190E+02:1.800057190E+02 Av.step =    1.000000000E-02
+       N of accepted steps 1.000000000E+03 Eff_average_step= 1.000000000E-02
+       Other:kBvg=0.000000000E+00 kTiWd=0.000000000E+00 k2g=0.000000000E+00
+             kHCS=0.000000000E+00 kCour=0.000000000E+00 Sum=0.000000000E+00
+       N_rej_step_by_MEPV = 0.000000000E+00 N_rej_steps = 0.000000000E+00
+ %inf- Escaped(+)/entered(-) mass: Ms = -5.844156517E-04
+       Initial mass (at TAU=0)   : M0 = 1.176599940E+01
+       Current mass (current TAU): Mc = 1.176658381E+01
+       (Mc + Ms - M0) / M0 = 2.816263996E-12
+       (Mc + Ms - M0) / Mc = 2.816124120E-12
+ %inf- Escaped(+)/entered(-) enthalpy: Hs = -1.782912470E+03
+       Initial enthalpy (at TAU=0)   : H0 = 9.977566055E+05
+       Current enthalpy (current TAU): Hc = 9.995395180E+05
+       (Hc + Hs - H0) / H0 = 9.812891999E-12
+       (Hc + Hs - H0) / Hc = 9.795388411E-12
+ %inf- Noncond. components in gas and water phases:
+ %inf- Escaped(+)/entered(-) mass: Ms = 6.724022772E-15
+       Initial mass (at TAU=0)   : M0 = 0.000000000E+00
+       Current mass (current TAU): Mc = 1.809077767E-17
+       (Mc + Ms - M0) = 6.742113549E-15
+ %inf- Noncond. components in water phase:
+ %inf- Escaped(+)/entered(-) mass: Ms = -6.322047025E-30
+       Initial mass (at TAU=0)   : M0 = 0.000000000E+00
+       Current mass (current TAU): Mc = 6.322047025E-30
+       (Mc + Ms - M0) = -1.751623080E-43
+  
+ %inf- Problem time = 1.900057190E+02 Step = 1.000000000E-02
+ ----- No divisions of DT occured in CH-s because of "Cour > C_max"
+ ----- No divisions of DT occured in CH-s because of "DisM > D_max"
+ ----- No divisions of DT occured in CH-s because of "DEnt > DE_max"
+ ----- No divisions of DT occured in CH-s because of "D_Pr > DP_max"
+ ----- No divisions of DT occured in CH-s because of "DVel > DV_max"
+ %inf- Gen_aSt = 9.999984294E-03 N_lim = 0.000000000E+00 eS= 9.999984762E-03
+ %inf- Interval 1.800057190E+02:1.900057190E+02 Av.step =    1.000000000E-02
+       N of accepted steps 1.000000000E+03 Eff_average_step= 1.000000000E-02
+       Other:kBvg=0.000000000E+00 kTiWd=0.000000000E+00 k2g=0.000000000E+00
+             kHCS=0.000000000E+00 kCour=0.000000000E+00 Sum=0.000000000E+00
+       N_rej_step_by_MEPV = 0.000000000E+00 N_rej_steps = 0.000000000E+00
+ %inf- Escaped(+)/entered(-) mass: Ms = -5.937658508E-04
+       Initial mass (at TAU=0)   : M0 = 1.176599940E+01
+       Current mass (current TAU): Mc = 1.176659316E+01
+       (Mc + Ms - M0) / M0 = 2.459965989E-12
+       (Mc + Ms - M0) / Mc = 2.459841854E-12
+ %inf- Escaped(+)/entered(-) enthalpy: Hs = -1.786159012E+03
+       Initial enthalpy (at TAU=0)   : H0 = 9.977566055E+05
+       Current enthalpy (current TAU): Hc = 9.995427646E+05
+       (Hc + Hs - H0) / H0 = 9.474411806E-12
+       (Hc + Hs - H0) / Hc = 9.457481259E-12
+ %inf- Noncond. components in gas and water phases:
+ %inf- Escaped(+)/entered(-) mass: Ms = 7.353413486E-15
+       Initial mass (at TAU=0)   : M0 = 0.000000000E+00
+       Current mass (current TAU): Mc = 8.806689924E-17
+       (Mc + Ms - M0) = 7.441480385E-15
+ %inf- Noncond. components in water phase:
+ %inf- Escaped(+)/entered(-) mass: Ms = -3.208418081E-29
+       Initial mass (at TAU=0)   : M0 = 0.000000000E+00
+       Current mass (current TAU): Mc = 3.208418081E-29
+       (Mc + Ms - M0) = 2.746544990E-43
+  
+ %inf- Problem time = 2.000057190E+02 Step = 1.000000000E-02
+ ----- No divisions of DT occured in CH-s because of "Cour > C_max"
+ ----- No divisions of DT occured in CH-s because of "DisM > D_max"
+ ----- No divisions of DT occured in CH-s because of "DEnt > DE_max"
+ ----- No divisions of DT occured in CH-s because of "D_Pr > DP_max"
+ ----- No divisions of DT occured in CH-s because of "DVel > DV_max"
+ %inf- Gen_aSt = 9.999985079E-03 N_lim = 0.000000000E+00 eS= 9.999985524E-03
+ %inf- Interval 1.900057190E+02:2.000057190E+02 Av.step =    1.000000000E-02
+       N of accepted steps 1.000000000E+03 Eff_average_step= 1.000000000E-02
+       Other:kBvg=0.000000000E+00 kTiWd=0.000000000E+00 k2g=0.000000000E+00
+             kHCS=0.000000000E+00 kCour=0.000000000E+00 Sum=0.000000000E+00
+       N_rej_step_by_MEPV = 0.000000000E+00 N_rej_steps = 0.000000000E+00
+ %inf- Escaped(+)/entered(-) mass: Ms = -6.019234965E-04
+       Initial mass (at TAU=0)   : M0 = 1.176599940E+01
+       Current mass (current TAU): Mc = 1.176660132E+01
+       (Mc + Ms - M0) / M0 = 2.157414630E-12
+       (Mc + Ms - M0) / Mc = 2.157304267E-12
+ %inf- Escaped(+)/entered(-) enthalpy: Hs = -1.788996887E+03
+       Initial enthalpy (at TAU=0)   : H0 = 9.977566055E+05
+       Current enthalpy (current TAU): Hc = 9.995456024E+05
+       (Hc + Hs - H0) / H0 = 9.194036796E-12
+       (Hc + Hs - H0) / Hc = 9.177581215E-12
+ %inf- Noncond. components in gas and water phases:
+ %inf- Escaped(+)/entered(-) mass: Ms = 7.911144115E-15
+       Initial mass (at TAU=0)   : M0 = 0.000000000E+00
+       Current mass (current TAU): Mc = 7.786151852E-17
+       (Mc + Ms - M0) = 7.989005633E-15
+ %inf- Noncond. components in water phase:
+ %inf- Escaped(+)/entered(-) mass: Ms = -2.469770273E-29
+       Initial mass (at TAU=0)   : M0 = 0.000000000E+00
+       Current mass (current TAU): Mc = 2.469770273E-29
+       (Mc + Ms - M0) = 1.569454280E-43
+  
+ %inf- Problem time = 2.100057190E+02 Step = 1.000000000E-02
+ ----- No divisions of DT occured in CH-s because of "Cour > C_max"
+ ----- No divisions of DT occured in CH-s because of "DisM > D_max"
+ ----- No divisions of DT occured in CH-s because of "DEnt > DE_max"
+ ----- No divisions of DT occured in CH-s because of "D_Pr > DP_max"
+ ----- No divisions of DT occured in CH-s because of "DVel > DV_max"
+ %inf- Gen_aSt = 9.999985790E-03 N_lim = 0.000000000E+00 eS= 9.999986214E-03
+ %inf- Interval 2.000057190E+02:2.100057190E+02 Av.step =    1.000000000E-02
+       N of accepted steps 1.000000000E+03 Eff_average_step= 1.000000000E-02
+       Other:kBvg=0.000000000E+00 kTiWd=0.000000000E+00 k2g=0.000000000E+00
+             kHCS=0.000000000E+00 kCour=0.000000000E+00 Sum=0.000000000E+00
+       N_rej_step_by_MEPV = 0.000000000E+00 N_rej_steps = 0.000000000E+00
+ %inf- Escaped(+)/entered(-) mass: Ms = -6.056882396E-04
+       Initial mass (at TAU=0)   : M0 = 1.176599940E+01
+       Current mass (current TAU): Mc = 1.176660509E+01
+       (Mc + Ms - M0) / M0 = 1.207789856E-14
+       (Mc + Ms - M0) / Mc = 1.207727685E-14
+ %inf- Escaped(+)/entered(-) enthalpy: Hs = -1.789626963E+03
+       Initial enthalpy (at TAU=0)   : H0 = 9.977566055E+05
+       Current enthalpy (current TAU): Hc = 9.995462325E+05
+       (Hc + Hs - H0) / H0 = 7.105633839E-12
+       (Hc + Hs - H0) / Hc = 7.092911632E-12
+ %inf- Noncond. components in gas and water phases:
+ %inf- Escaped(+)/entered(-) mass: Ms = 8.477468089E-15
+       Initial mass (at TAU=0)   : M0 = 0.000000000E+00
+       Current mass (current TAU): Mc = 8.338546018E-17
+       (Mc + Ms - M0) = 8.560853549E-15
+ %inf- Noncond. components in water phase:
+ %inf- Escaped(+)/entered(-) mass: Ms = -3.358304095E-29
+       Initial mass (at TAU=0)   : M0 = 0.000000000E+00
+       Current mass (current TAU): Mc = 3.358304095E-29
+       (Mc + Ms - M0) = 1.345246526E-43
+ %inf- KORSAR terminated: TAU >= FIN_TIM
